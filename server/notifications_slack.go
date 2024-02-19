@@ -14,11 +14,9 @@ package server
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/memphisdev/memphis/db"
 	"github.com/memphisdev/memphis/models"
 	"strings"
-	"time"
 
 	"github.com/slack-go/slack"
 )
@@ -145,7 +143,7 @@ func (it IntegrationsHandler) getSlackIntegrationDetails(body models.CreateInteg
 		disconnectAlert = false
 	}
 
-	keys, properties := createIntegrationsKeysAndProperties("slack", authToken, channelID, pmAlert, svfAlert, disconnectAlert, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_, map[string]interface{}{}, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_)
+	keys, properties := createIntegrationsKeysAndProperties("slack", authToken, channelID, _EMPTY_, pmAlert, svfAlert, disconnectAlert, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_, map[string]interface{}{}, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_)
 	return keys, properties, 0, nil
 }
 
@@ -257,7 +255,7 @@ func updateSlackIntegration(tenantName string, authToken string, channelID strin
 	if err != nil {
 		return slackIntegration, err
 	}
-	keys, properties := createIntegrationsKeysAndProperties("slack", authToken, channelID, pmAlert, svfAlert, disconnectAlert, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_, map[string]interface{}{}, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_)
+	keys, properties := createIntegrationsKeysAndProperties("slack", authToken, channelID, _EMPTY_, pmAlert, svfAlert, disconnectAlert, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_, map[string]interface{}{}, _EMPTY_, _EMPTY_, _EMPTY_, _EMPTY_)
 	stringMapKeys := GetKeysAsStringMap(keys)
 	cloneKeys := copyMaps(stringMapKeys)
 	encryptedValue, err := EncryptAES([]byte(authToken))
@@ -316,21 +314,9 @@ func hideSlackAuthToken(authToken string) string {
 	return authToken
 }
 
-type slackMsg struct {
-	Msg          []byte
-	ReplySubject string
-}
-
-func sendSlackNotifications(s *Server, msgs []slackMsg) {
-	tenantMsgs := groupMessagesByTenant(msgs, s)
-	for tenantName, tMsgs := range tenantMsgs {
-		sendTenantSlackNotifications(s, tenantName, tMsgs)
-	}
-}
-
-func sendTenantSlackNotifications(s *Server, tenantName string, msgs []NotificationMsgWithReply) {
+func sendSlackTenantNotifications(s *Server, tenantName string, msgs []NotificationMsgWithReply) {
 	var ok bool
-	if _, ok := NotificationFunctionsMap[slackIntegrationName]; !ok {
+	if _, ok := NotificationFunctionsMap["slack"]; !ok {
 		s.Errorf("[tenant: %v]slack integration doesn't exist", tenantName)
 		return
 	}
@@ -343,7 +329,7 @@ func sendTenantSlackNotifications(s *Server, tenantName string, msgs []Notificat
 	}
 
 	var slackIntegration models.SlackIntegration
-	if slackIntegration, ok = tenantIntegrations[slackIntegrationName].(models.SlackIntegration); !ok {
+	if slackIntegration, ok = tenantIntegrations["slack"].(models.SlackIntegration); !ok {
 		// slack is either not enabled or have been disabled - just ack these messages
 		ackMsgs(s, msgs)
 		return
@@ -377,50 +363,4 @@ func sendTenantSlackNotifications(s *Server, tenantName string, msgs []Notificat
 			s.Errorf("[tenant: %v]failed to send ACK for slack notification: %v", tenantName, err.Error())
 		}
 	}
-}
-
-func nackMsgs(s *Server, msgs []NotificationMsgWithReply, nackDuration time.Duration) error {
-	nakPayload := []byte(fmt.Sprintf("%s {\"delay\": %d}", AckNak, nackDuration.Nanoseconds()))
-	for i := 0; i < len(msgs); i++ {
-		m := msgs[i]
-		err := s.sendInternalAccountMsg(s.MemphisGlobalAccount(), m.ReplySubject, nakPayload)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func ackMsgs(s *Server, msgs []NotificationMsgWithReply) {
-	for i := 0; i < len(msgs); i++ {
-		m := msgs[i]
-		s.sendInternalAccountMsg(s.MemphisGlobalAccount(), m.ReplySubject, []byte(_EMPTY_))
-	}
-}
-
-func groupMessagesByTenant(msgs []slackMsg, l Logger) map[string][]NotificationMsgWithReply {
-	tenantMsgs := make(map[string][]NotificationMsgWithReply)
-	for _, message := range msgs {
-		msg := message.Msg
-		reply := message.ReplySubject
-		var nm NotificationMsg
-		err := json.Unmarshal(msg, &nm)
-		if err != nil {
-			// TODO: does it make sense to send ack for this message?
-			// TODO: it's malformed and won't be unmarshalled next time as well
-			l.Errorf("failed to unmarshal slack message: %v", err)
-			continue
-		}
-		nmr := NotificationMsgWithReply{
-			NotificationMsg: &nm,
-			ReplySubject:    reply,
-		}
-		if _, ok := tenantMsgs[nm.TenantName]; !ok {
-			tenantMsgs[nm.TenantName] = []NotificationMsgWithReply{}
-		}
-		tenantMsgs[nm.TenantName] = append(tenantMsgs[nm.TenantName], nmr)
-	}
-
-	return tenantMsgs
 }

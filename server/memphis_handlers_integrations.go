@@ -33,9 +33,10 @@ const INTEGRATIONS_AUDIT_LOGS_CONSUMER = "$memphis_integrations_audit_logs_consu
 type IntegrationsHandler struct{ S *Server }
 
 var integrationsAuditLogLabelToSubjectMap = map[string]string{
-	"slack":  integrationsAuditLogsStream + ".%s.slack",
-	"s3":     integrationsAuditLogsStream + ".%s.s3",
-	"github": integrationsAuditLogsStream + ".%s.github",
+	"slack":   integrationsAuditLogsStream + ".%s.slack",
+	"discord": integrationsAuditLogsStream + ".%s.discord",
+	"s3":      integrationsAuditLogsStream + ".%s.s3",
+	"github":  integrationsAuditLogsStream + ".%s.github",
 }
 
 func (it IntegrationsHandler) CreateIntegration(c *gin.Context) {
@@ -88,6 +89,27 @@ func (it IntegrationsHandler) CreateIntegration(c *gin.Context) {
 			return
 		}
 		integration = slackIntegration
+	case "discord":
+		if !ValidataAccessToFeature(user.TenantName, "feature-integration-discord") {
+			serv.Warnf("[tenant: %v][user: %v]CreateIntegration at ValidataAccessToFeature: %v", user.TenantName, user.Username, "feature-notifications")
+			c.AbortWithStatusJSON(SHOWABLE_ERROR_STATUS_CODE, gin.H{"message": "This feature is not available on your current pricing plan, in order to enjoy it you will have to upgrade your plan"})
+			return
+		}
+		_, _, discordIntegration, errorCode, err := it.handleCreateDiscordIntegration(user.TenantName, body)
+		if err != nil {
+			if errorCode == 500 {
+				serv.Errorf("[tenant: %v][user: %v]CreateIntegration at handleCreateDiscordIntegration: %v", user.TenantName, user.Username, err.Error())
+				message = "Server error"
+			} else {
+				message = err.Error()
+				serv.Warnf("[tenant: %v][user: %v]CreateIntegration at handleCreateDiscordIntegration: %v", user.TenantName, user.Username, message)
+				auditLog := fmt.Sprintf("Error while trying to connect with Discord: %v", message)
+				it.Errorf(integrationType, user.TenantName, auditLog)
+			}
+			c.AbortWithStatusJSON(errorCode, gin.H{"message": message})
+			return
+		}
+		integration = discordIntegration
 	case "s3":
 		if !ValidataAccessToFeature(user.TenantName, "feature-storage-tiering") {
 			serv.Warnf("[tenant: %v][user: %v]CreateIntegration at ValidataAccessToFeature: %v", user.TenantName, user.Username, "feature-storage-tiering")
@@ -185,6 +207,22 @@ func (it IntegrationsHandler) UpdateIntegration(c *gin.Context) {
 			return
 		}
 		integration = slackIntegration
+	case "discord":
+		discordIntegration, errorCode, err := it.handleUpdateDiscordIntegration(user.TenantName, "discord", body)
+		if err != nil {
+			if errorCode == 500 {
+				serv.Errorf("[tenant:%v][user: %v]UpdateIntegration at handleUpdateDiscordIntegration: %v", user.TenantName, user.Username, err.Error())
+				message = "Server error"
+			} else {
+				message = err.Error()
+				serv.Warnf("[tenant:%v][user: %v]UpdateIntegration at handleUpdateDiscordIntegration: %v", user.TenantName, user.Username, message)
+				auditLog := fmt.Sprintf("Error while trying to connect with Discord: %v", message)
+				it.Errorf(integrationType, user.TenantName, auditLog)
+			}
+			c.AbortWithStatusJSON(errorCode, gin.H{"message": message})
+			return
+		}
+		integration = discordIntegration
 	case "s3":
 		s3Integration, errorCode, err := it.handleUpdateS3Integration(user.TenantName, body)
 		if err != nil {
@@ -375,7 +413,7 @@ func (it IntegrationsHandler) DisconnectIntegration(c *gin.Context) {
 	}
 
 	switch integrationType {
-	case "slack":
+	case "slack", "discord":
 		update := models.SdkClientsUpdates{
 			Type:   sendNotificationType,
 			Update: false,
@@ -396,13 +434,18 @@ func (it IntegrationsHandler) DisconnectIntegration(c *gin.Context) {
 	c.IndentedJSON(200, gin.H{})
 }
 
-func createIntegrationsKeysAndProperties(integrationType, authToken string, channelID string, pmAlert bool, svfAlert bool, disconnectAlert bool, accessKey, secretKey, bucketName, region, url, forceS3PathStyle string, githubIntegrationDetails map[string]interface{}, repo, branch, repoType, repoOwner string) (map[string]interface{}, map[string]bool) {
+func createIntegrationsKeysAndProperties(integrationType, authToken string, channelID string, webhookUrl string, pmAlert bool, svfAlert bool, disconnectAlert bool, accessKey, secretKey, bucketName, region, url, forceS3PathStyle string, githubIntegrationDetails map[string]interface{}, repo, branch, repoType, repoOwner string) (map[string]interface{}, map[string]bool) {
 	keys := make(map[string]interface{})
 	properties := make(map[string]bool)
 	switch integrationType {
 	case "slack":
 		keys["auth_token"] = authToken
 		keys["channel_id"] = channelID
+		properties[PoisonMAlert] = pmAlert
+		properties[SchemaVAlert] = svfAlert
+		properties[DisconEAlert] = disconnectAlert
+	case "discord":
+		keys["webhook_url"] = webhookUrl
 		properties[PoisonMAlert] = pmAlert
 		properties[SchemaVAlert] = svfAlert
 		properties[DisconEAlert] = disconnectAlert
@@ -464,6 +507,10 @@ func (it IntegrationsHandler) GetIntegrationDetails(c *gin.Context) {
 		integration.Keys["auth_token"] = "xoxb-****"
 	}
 
+	if integration.Name == "discord" && integration.Keys["webhook_url"] != _EMPTY_ {
+		integration.Keys["webhook_url"] = hideDiscordWebhookUrl(integration.Keys["webhook_url"].(string))
+	}
+
 	if integration.Name == "s3" && integration.Keys["secret_key"] != _EMPTY_ {
 		integration.Keys["secret_key"] = hideIntegrationSecretKey(integration.Keys["secret_key"].(string))
 	}
@@ -522,6 +569,9 @@ func (it IntegrationsHandler) GetAllIntegrations(c *gin.Context) {
 	for i := 0; i < len(integrations); i++ {
 		if integrations[i].Name == "slack" && integrations[i].Keys["auth_token"] != _EMPTY_ {
 			integrations[i].Keys["auth_token"] = "xoxb-****"
+		}
+		if integrations[i].Name == "discord" && integrations[i].Keys["webhook_url"] != _EMPTY_ {
+			integrations[i].Keys["webhook_url"] = hideDiscordWebhookUrl(integrations[i].Keys["webhook_url"].(string))
 		}
 		if integrations[i].Name == "s3" && integrations[i].Keys["secret_key"] != _EMPTY_ {
 			integrations[i].Keys["secret_key"] = hideIntegrationSecretKey(integrations[i].Keys["secret_key"].(string))

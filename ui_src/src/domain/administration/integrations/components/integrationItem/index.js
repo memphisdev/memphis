@@ -20,6 +20,7 @@ import { ReactComponent as MemphisVerifiedIcon } from 'assets/images/memphisFunc
 import { capitalizeFirst } from 'services/valueConvertor';
 import { Context } from 'hooks/store';
 import SlackIntegration from '../slackIntegration';
+import DiscordIntegration from '../discordIntegration';
 import S3Integration from '../s3Integration';
 import Tag from 'components/tag';
 import DataDogIntegration from '../dataDogIntegration';
@@ -59,6 +60,16 @@ const IntegrationItem = ({ value, lockFeature, isOpen }) => {
             case 'Slack':
                 return (
                     <SlackIntegration
+                        close={(data) => {
+                            modalFlip(false);
+                            setIntegrateValue(data);
+                        }}
+                        value={ref.current}
+                    />
+                );
+            case 'Discord':
+                return (
+                    <DiscordIntegration
                         close={(data) => {
                             modalFlip(false);
                             setIntegrateValue(data);

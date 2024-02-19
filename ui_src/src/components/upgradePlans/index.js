@@ -204,6 +204,17 @@ const UpgradePlans = ({ open, onClose, content, isExternal = true }) => {
                                 </div>
                             </div>
                         )}
+                        {downgradeInstructions['feature-integration-discord'] && (
+                            <div className="redirect-section">
+                                <div className="violations-list">
+                                    <p className="violation-title"> Using Discord integration is violating the new plan</p>
+                                    <div className="hint-line">
+                                        <HiOutlineExclamationCircle />
+                                        <span>Please fix the following issues before performing a downgrade</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         {downgradeInstructions['feature-management-users'] && (
                             <div className="redirect-section">
                                 <p className="violation-title">Too many management users ({downgradeInstructions['feature-management-users']['usage']})</p>

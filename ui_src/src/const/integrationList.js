@@ -38,6 +38,7 @@ import { ReactComponent as DebeziumIcon } from 'assets/images/debeziumIcon.svg';
 import { ReactComponent as ElasticIcon } from 'assets/images/elasticIcon.svg';
 import { ReactComponent as ZapierIcon } from 'assets/images/zapierIcon.svg';
 import { ReactComponent as SlackLogo } from 'assets/images/slackLogo.svg';
+import { ReactComponent as DiscordLogo } from 'assets/images/discordIntegrationIcon.svg';
 import { ReactComponent as MemphisVerifiedIcon } from 'assets/images/memphisFunctionIcon.svg';
 import s3Banner from 'assets/images/s3Banner.webp';
 import { ReactComponent as S3Logo } from 'assets/images/s3Logo.svg';
@@ -271,6 +272,40 @@ export const INTEGRATION_LIST = {
                 <p>Description</p>
                 <span className="content">
                     Receive alerts and notifications directly to your chosen slack channel for faster response and better real-time observability
+                </span>
+            </div>
+        )
+    },
+    Discord: {
+        name: 'Discord',
+        by: 'Memphis.dev',
+        banner: <img className="banner" src={slackBanner} alt="discordBanner" />,
+        insideBanner: <img className="insideBanner" src={slackBannerPopup} alt="discordBannerPopup" />,
+        icon: <DiscordLogo alt="discordLogo" />,
+        description: 'Receive alerts and notifications directly to your chosen discord channel for faster response and better real-time observability',
+        category: CATEGORY_LIST['Notifications'],
+        hasLogs: true,
+        comingSoon: false,
+        header: (
+            <div className="header-left-side">
+                <DiscordLogo alt="discordLogo" />
+                <div className="details">
+                    <p>Discord</p>
+                    <span className="by">
+                        <MemphisVerifiedIcon />
+                        <label className="memphis">Memphis.dev</label>
+                        <Divider type="vertical" />
+                        <label className="oss-cloud-badge">Open source</label>
+                        <label className="oss-cloud-badge">Cloud</label>
+                    </span>
+                </div>
+            </div>
+        ),
+        integrateDesc: (
+            <div className="integrate-description">
+                <p>Description</p>
+                <span className="content">
+                    Receive alerts and notifications directly to your chosen discord channel for faster response and better real-time observability
                 </span>
             </div>
         )

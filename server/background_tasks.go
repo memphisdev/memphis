@@ -133,6 +133,11 @@ func (s *Server) ListenForIntegrationsUpdateEvents() error {
 					EditClusterCompHost("ui_host", integrationUpdate.UIUrl)
 				}
 				CacheDetails("slack", integrationUpdate.Keys, integrationUpdate.Properties, integrationUpdate.TenantName)
+			case "discord":
+				if s.opts.UiHost == "" {
+					EditClusterCompHost("ui_host", integrationUpdate.UIUrl)
+				}
+				CacheDetails("discord", integrationUpdate.Keys, integrationUpdate.Properties, integrationUpdate.TenantName)
 			case "s3":
 				CacheDetails("s3", integrationUpdate.Keys, integrationUpdate.Properties, integrationUpdate.TenantName)
 			case "github":
@@ -784,6 +789,28 @@ func (s *Server) CheckBrokenConnectedIntegrations() error {
 						serv.Errorf("[tenant: %s]CheckBrokenConnectedIntegrations at UpdateIsValidIntegration: %v", integration.TenantName, err.Error())
 					}
 				}
+			case "discord":
+				key := getAESKey()
+				if _, ok := integration.Keys["webhook_url"].(string); !ok {
+					integration.Keys["webhook_url"] = ""
+				}
+				webhookUrl, err := DecryptAES(key, integration.Keys["webhook_url"].(string))
+				if err != nil {
+					serv.Errorf("[tenant: %s]CheckBrokenConnectedIntegrations at DecryptAES: %v", integration.TenantName, err.Error())
+				}
+				err = testDiscordIntegration(webhookUrl)
+				if err != nil {
+					serv.Warnf("[tenant: %s]CheckBrokenConnectedIntegrations at testDiscordIntegration: %v", integration.TenantName, err.Error())
+					err = db.UpdateIsValidIntegration(integration.TenantName, integration.Name, false)
+					if err != nil {
+						serv.Errorf("[tenant: %s]CheckBrokenConnectedIntegrations at UpdateIsValidIntegration: %v", integration.TenantName, err.Error())
+					}
+				} else {
+					err = db.UpdateIsValidIntegration(integration.TenantName, integration.Name, true)
+					if err != nil {
+						serv.Errorf("[tenant: %s]CheckBrokenConnectedIntegrations at UpdateIsValidIntegration: %v", integration.TenantName, err.Error())
+					}
+				}
 			case "s3":
 				key := getAESKey()
 				if _, ok := integration.Keys["access_key"].(string); !ok {
@@ -865,45 +892,43 @@ func (s *Server) ConsumeNotificationsBufferMessages() error {
 			continue
 		}
 
-		msgs, err := fetchMessages[slackMsg](s,
+		msgs, err := fetchMessages(s,
 			NOTIFICATIONS_BUFFER_CONSUMER,
 			notificationsStreamName,
 			mAmount,
-			3*time.Second,
-			createSlackMsg)
+			3*time.Second)
 
 		if err != nil {
 			s.Errorf("Failed to fetch notifications: %v", err.Error())
 			continue
 		}
 
-		sendSlackNotifications(s, msgs)
+		sendNotifications(s, msgs)
 	}
 }
 
-func createSlackMsg(msg []byte, reply string) slackMsg {
-	return slackMsg{
+func createNotificationBufferMsg(msg []byte, reply string) notificationBufferMsg {
+	return notificationBufferMsg{
 		Msg:          msg,
 		ReplySubject: reply,
 	}
 }
 
-func fetchMessages[T any](s *Server,
+func fetchMessages(s *Server,
 	consumer,
 	streamName string,
 	mAmount int,
-	timeToWait time.Duration,
-	create func(msg []byte, reply string) T) ([]T, error) {
+	timeToWait time.Duration) ([]notificationBufferMsg, error) {
 
 	req := []byte(strconv.FormatUint(uint64(mAmount), 10))
-	resp := make(chan T)
+	resp := make(chan notificationBufferMsg)
 	replySubject := consumer + "_reply_" + s.memphis.nuid.Next()
 
 	timeout := time.NewTimer(timeToWait)
 	sub, err := s.subscribeOnAcc(s.MemphisGlobalAccount(), replySubject, replySubject+"_sid", func(_ *client, subject string, reply string, msg []byte) {
 		go func(subject, reply string, msg []byte) {
 			if reply != "" {
-				m := create(msg, reply)
+				m := createNotificationBufferMsg(msg, reply)
 				resp <- m
 			}
 		}(subject, reply, copyBytes(msg))
@@ -915,7 +940,7 @@ func fetchMessages[T any](s *Server,
 	subject := fmt.Sprintf(JSApiRequestNextT, streamName, consumer)
 	s.sendInternalAccountMsgWithReply(s.MemphisGlobalAccount(), subject, replySubject, nil, req, true)
 
-	msgs := make([]T, 0)
+	var msgs []notificationBufferMsg
 	stop := false
 	for {
 		if stop {

@@ -41,8 +41,13 @@ func updateNewClientWithConfig(c *client, connId string) {
 		c.Errorf("updateNewClientWithConfig: %v", err.Error())
 	}
 
+	discordEnabled, err := IsDiscordEnabled(c.acc.GetName())
+	if err != nil {
+		c.Errorf("updateNewClientWithConfig: %v", err.Error())
+	}
+
 	config := models.GlobalConfigurationsUpdate{
-		Notifications: slackEnabled,
+		Notifications: slackEnabled || discordEnabled,
 	}
 
 	sendConnectUpdate(c, config, connId)

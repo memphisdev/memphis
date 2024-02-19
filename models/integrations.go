@@ -33,6 +33,12 @@ type SlackIntegration struct {
 	Client     *slack.Client     `json:"client"`
 }
 
+type DiscordIntegration struct {
+	Name       string            `json:"name"`
+	Keys       map[string]string `json:"keys"`
+	Properties map[string]bool   `json:"properties"`
+}
+
 type CreateIntegrationSchema struct {
 	Name       string                 `json:"name"`
 	Keys       map[string]interface{} `json:"keys"`

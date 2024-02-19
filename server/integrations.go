@@ -33,6 +33,7 @@ func InitializeIntegrations() error {
 	StorageFunctionsMap = make(map[string]interface{})
 	SourceCodeManagementFunctionsMap = make(map[string]map[string]interface{})
 	NotificationFunctionsMap["slack"] = sendMessageToSlackChannel
+	NotificationFunctionsMap["discord"] = sendMessagesToDiscordChannel
 	StorageFunctionsMap["s3"] = serv.uploadToS3Storage
 	SourceCodeManagementFunctionsMap["github"] = make(map[string]interface{})
 	SourceCodeManagementFunctionsMap["github"]["get_all_repos"] = serv.getGithubRepositories
@@ -67,6 +68,12 @@ func InitializeConnections() error {
 				return err
 			}
 			integration.Keys["auth_token"] = decryptedValue
+		} else if value, ok := integration.Keys["webhook_url"]; ok {
+			decryptedValue, err := DecryptAES(key, value.(string))
+			if err != nil {
+				return err
+			}
+			integration.Keys["webhook_url"] = decryptedValue
 		}
 		CacheDetails(integration.Name, integration.Keys, integration.Properties, integration.TenantName)
 	}
@@ -77,6 +84,8 @@ func CacheDetails(integrationType string, keys map[string]interface{}, propertie
 	switch integrationType {
 	case "slack":
 		cacheDetailsSlack(keys, properties, tenantName)
+	case "discord":
+		cacheDetailsDiscord(keys, properties, tenantName)
 	case "s3":
 		cacheDetailsS3(keys, properties, tenantName)
 	case "github":
@@ -96,6 +105,11 @@ func EncryptOldUnencryptedValues() error {
 		}
 
 		err = encryptUnencryptedKeysByIntegrationType("slack", "auth_token", tenant.Name)
+		if err != nil {
+			return err
+		}
+
+		err = encryptUnencryptedKeysByIntegrationType("discord", "webhook_url", tenant.Name)
 		if err != nil {
 			return err
 		}
@@ -122,6 +136,11 @@ func encryptUnencryptedKeysByIntegrationType(integrationType, keyTitle string, t
 			needToEncrypt = true
 		}
 	} else if value, ok := integration.Keys["auth_token"]; ok {
+		_, err := DecryptAES(key, value.(string))
+		if err != nil {
+			needToEncrypt = true
+		}
+	} else if value, ok := integration.Keys["webhook_url"]; ok {
 		_, err := DecryptAES(key, value.(string))
 		if err != nil {
 			needToEncrypt = true
