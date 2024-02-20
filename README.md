@@ -48,7 +48,7 @@ docker compose -f docker-compose.yml -p memphis up
 
 </div>
 
-## ✨ Key Features [v1.4.2](https://docs.memphis.dev/memphis/release-notes/releases/v1.4.2-latest)
+## ✨ Key Features [v1.4.3](https://docs.memphis.dev/memphis/release-notes/releases/v1.4.3-latest-stable)
 
 
 ![20](https://user-images.githubusercontent.com/70286779/220196529-abb958d2-5c58-4c33-b5e0-40f5446515ad.png) Production-ready message broker in under 3 minutes<br>
