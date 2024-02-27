@@ -29,6 +29,7 @@ import { ReactComponent as StationIcon } from 'assets/images/stationsIconActive.
 import GraphOverviewLight from 'assets/images/lightGraphOverview.png';
 import GraphOverviewDark from 'assets/images/darkGraphOverview.png';
 import { ReactComponent as CloudTeaser } from 'assets/images/cloudTeaser.svg';
+import { ReactComponent as OverviewSearchIcon } from 'assets/images/purpleSearchIcon.svg';
 import { ReactComponent as PlusElement } from 'assets/images/plusElement.svg';
 import { ReactComponent as EditIcon } from 'assets/images/editIcon.svg';
 import CreateStationForm from 'components/createStationForm';
@@ -54,6 +55,7 @@ import StreamLineage from '../streamLineage';
 import pathDomains from 'router';
 import { useHistory } from 'react-router-dom';
 import { FaArrowCircleUp } from 'react-icons/fa';
+import OverViewSearchBar from 'components/OverviewSearchBar';
 
 const dataSentences = [
     `“Data is the new oil” — Clive Humby`,
@@ -75,6 +77,7 @@ function OverView() {
     const [cloudModalOpen, setCloudModalOpen] = useState(false);
     const [openCloudModal, setOpenCloudModal] = useState(false);
     const [dataSentence, setDataSentence] = useState(dataSentences[0]);
+    const [OpenOverviewSerchBox, setOpenOverviewSearchBox] = useState(false)
     const history = useHistory();
 
     const getRandomInt = (max) => {
@@ -251,6 +254,13 @@ function OverView() {
                             </div>
                         </div>
                         <div className="btn-section">
+                            <OverviewSearchIcon
+                                alt="Search"
+                                onClick={() => {
+                                    setOpenOverviewSearchBox(true);
+                                }}
+                            />
+                            <AsyncTasks height={'32px'} overView />
                             {!isCloud() && (
                                 <CloudTeaser
                                     alt="Cloud"
@@ -377,6 +387,7 @@ function OverView() {
             </Modal>
             <CloudModal type="cloud" open={cloudModalOpen} handleClose={() => setCloudModalOpen(false)} />
             <CloudModal type="upgrade" open={openCloudModal} handleClose={() => setOpenCloudModal(false)} />
+            <OverViewSearchBar open={OpenOverviewSerchBox} handleClose={() => setOpenOverviewSearchBox(false)}/>
         </div>
     );
 }

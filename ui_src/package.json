@@ -14,7 +14,7 @@
     "@testing-library/user-event": "^13.5.0",
     "ajv": "^8.11.2",
     "ajv-draft-04": "^1.0.0",
-    "antd": "4.23.1",
+    "antd": "^4.23.1",
     "avro-js": "^1.11.2",
     "axios": "^0.25.0",
     "buffer": "^6.0.3",
